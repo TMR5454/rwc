@@ -7,6 +7,8 @@ use std::io::{self, BufRead};
 use std::ops::{Add, AddAssign};
 use std::path::Path;
 
+use crate::nightly::unlikely;
+
 #[derive(Default, Debug, Clone)]
 struct Wc {
     path: String, /* file name */
@@ -40,7 +42,23 @@ impl Wc {
             self.chars += line.chars().count() as u32;
             self.lines += 1;
             self.words += line.split_whitespace().count() as u32;
-            self.max_line_length = max(self.max_line_length, size as u32);
+            self.max_line_length = max(
+                self.max_line_length,
+                line.chars()
+                    .map(|c| {
+                        if c.len_utf8() > 1 {
+                            2
+                        } else if c == '\t' {
+                            8
+                        } else if unlikely(c == '\n') {
+                            /* not count new-line */
+                            0
+                        } else {
+                            1
+                        }
+                    })
+                    .sum(),
+            );
             line.clear(); /* read_line() appending to String but read per line */
         }
 
