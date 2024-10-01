@@ -1,7 +1,7 @@
 use getopts::{Matches, Options};
 use std::cmp::max;
 use std::env;
-use std::fs::File;
+use std::fs;
 use std::io::ErrorKind;
 use std::io::{self, BufRead};
 use std::ops::{Add, AddAssign};
@@ -29,7 +29,7 @@ impl Wc {
     fn new() -> Self {
         Self::with_path("")
     }
-    fn analyze(&mut self, file: &File) -> std::io::Result<()> {
+    fn analyze(&mut self, file: &fs::File) -> std::io::Result<()> {
         let mut reader = io::BufReader::new(file);
         let mut line = String::with_capacity(256);
 
@@ -64,21 +64,21 @@ impl Wc {
 
         Ok(())
     }
-    fn print_result(&self, matches: &Matches) {
+    fn print_result(&self, matches: &Matches, width: usize) {
         if matches.opt_present("l") {
-            print!(" {}", self.lines);
+            print!(" {:>width$}", self.lines);
         }
         if matches.opt_present("m") {
-            print!(" {}", self.words);
+            print!(" {:>width$}", self.words);
         }
         if matches.opt_present("c") {
-            print!(" {}", self.chars);
+            print!(" {:>width$}", self.chars);
         }
         if matches.opt_present("w") {
-            print!(" {}", self.bytes);
+            print!(" {:>width$}", self.bytes);
         }
         if matches.opt_present("L") {
-            print!(" {}", self.max_line_length);
+            print!(" {:>width$}", self.max_line_length);
         }
 
         if !env::args().any(|s| s.starts_with('-')) {
@@ -89,7 +89,7 @@ impl Wc {
         println!(" {}", self.path);
     }
     fn run(&mut self) -> std::io::Result<()> {
-        let file = File::open(&self.path)?;
+        let file = fs::File::open(&self.path)?;
         let path = Path::new(&self.path);
 
         if path.is_dir() {
@@ -111,7 +111,7 @@ impl Add for Wc {
             chars: self.chars + rhs.chars,
             lines: self.lines + rhs.lines,
             words: self.words + rhs.words,
-            max_line_length: self.max_line_length,
+            max_line_length: max(self.max_line_length, rhs.max_line_length),
         }
     }
 }
@@ -122,20 +122,43 @@ impl AddAssign<&Wc> for Wc {
         self.chars += rhs.chars;
         self.lines += rhs.lines;
         self.words += rhs.words;
+        self.max_line_length = max(self.max_line_length, rhs.max_line_length);
     }
 }
 
-#[derive(Default)]
 pub struct Rwc {
+    program: String,
     opts: Options,
-    wcvec: Vec<Wc>,
+    matches: Matches,
+    width: usize,
 }
 
 impl Rwc {
+    fn calc_width(matches: &Matches) -> usize {
+        let mut sum = 0;
+
+        for file in &matches.free {
+            if let Ok(metadata) = fs::metadata(file) {
+                sum += metadata.len();
+            }
+        }
+
+        sum.to_string().len()
+    }
     pub fn with_opts(opts: Options) -> Self {
+        let args: Vec<String> = env::args().collect();
+        let matches = match opts.parse(&args[1..]) {
+            Ok(m) => m,
+            Err(f) => {
+                panic!("{}", f.to_string())
+            }
+        };
+
         Self {
+            program: args[0].clone(),
+            width: Self::calc_width(&matches),
             opts: opts,
-            ..Self::default()
+            matches: matches,
         }
     }
 
@@ -143,30 +166,20 @@ impl Rwc {
         Self::with_opts(Options::new())
     }
 
-    fn print_usage(&self, program: &str) {
-        let brief = format!("Usage: {} FILE [options]", program);
+    fn print_usage(&self) {
+        let brief = format!("Usage: {} FILE [options]", self.program);
         print!("{}", self.opts.usage(&brief));
     }
 
     pub fn exec(&mut self) -> std::io::Result<()> {
-        let args: Vec<String> = env::args().collect();
-
-        let matches = match self.opts.parse(&args[1..]) {
-            Ok(m) => m,
-            Err(f) => {
-                panic!("{}", f.to_string())
-            }
-        };
-
-        if matches.opt_present("h") {
-            let program = args[0].clone();
-            self.print_usage(&program);
+        if self.matches.opt_present("h") {
+            self.print_usage();
             return Ok(());
         }
 
         let mut total = Wc::with_path("total");
 
-        for file in &matches.free {
+        for file in &self.matches.free {
             let mut wc = Wc::with_path(file);
 
             match wc.run() {
@@ -177,13 +190,12 @@ impl Rwc {
                     eprintln!("{}: {}", &wc.path, e.to_string());
                 }
             }
-            wc.print_result(&matches);
-            self.wcvec.push(wc);
+            wc.print_result(&self.matches, self.width);
         }
 
-        if matches.free.len() > 1 {
+        if self.matches.free.len() > 1 {
             /* multiple files */
-            total.print_result(&matches);
+            total.print_result(&self.matches, self.width);
         }
 
         Ok(())

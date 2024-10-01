@@ -1,2 +1,2 @@
-pub mod wc;
 pub mod nightly;
+pub mod wc;
