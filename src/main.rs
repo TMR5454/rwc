@@ -16,8 +16,7 @@ fn parse_opt() -> Options {
 
 fn main() -> std::io::Result<()> {
     let opts = parse_opt();
-    let mut rwc = Rwc::with_opts(opts);
-    rwc.exec()?;
+    Rwc::with_opts(opts).exec()?;
 
     Ok(())
 }
