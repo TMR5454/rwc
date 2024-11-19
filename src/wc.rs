@@ -157,8 +157,8 @@ impl Rwc {
         Self {
             program: args[0].clone(),
             width: Self::calc_width(&matches),
-            opts: opts,
-            matches: matches,
+            opts,
+            matches,
         }
     }
 
@@ -187,7 +187,7 @@ impl Rwc {
                     total += &wc;
                 }
                 Err(e) => {
-                    eprintln!("{}: {}", &wc.path, e.to_string());
+                    eprintln!("{}: {}", &wc.path, e);
                 }
             }
             wc.print_result(&self.matches, self.width);
