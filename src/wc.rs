@@ -20,9 +20,9 @@ struct Wc {
 }
 
 impl Wc {
-    fn with_path(path: &str) -> Self {
+    fn with_path(path: impl Into<String>) -> Self {
         Self {
-            path: path.to_string(),
+            path: path.into(),
             ..Self::default()
         }
     }
