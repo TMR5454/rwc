@@ -5,7 +5,6 @@ use std::fs;
 use std::io::ErrorKind;
 use std::io::{self, BufRead};
 use std::ops::{Add, AddAssign};
-use std::path::Path;
 
 use crate::nightly::unlikely;
 
@@ -19,6 +18,21 @@ struct Wc {
     max_line_length: u32,
 }
 
+enum InputFrom {
+    File(fs::File),
+    Stdin,
+}
+
+impl InputFrom {
+    fn stream(self) -> Box<dyn std::io::Read> {
+        if let InputFrom::File(file) = self {
+            Box::new(file)
+        } else {
+            Box::new(io::stdin())
+        }
+    }
+}
+
 impl Wc {
     fn with_path(path: impl Into<String>) -> Self {
         Self {
@@ -27,10 +41,11 @@ impl Wc {
         }
     }
     fn new() -> Self {
+        /* if path.is_empty() then read from stdin */
         Self::with_path("")
     }
-    fn analyze(&mut self, file: &fs::File) -> std::io::Result<()> {
-        let mut reader = io::BufReader::new(file);
+    fn analyze(&mut self, input: InputFrom) -> std::io::Result<()> {
+        let mut reader = io::BufReader::new(input.stream());
         let mut line = String::with_capacity(256);
 
         loop {
@@ -89,14 +104,20 @@ impl Wc {
         println!(" {}", self.path);
     }
     fn run(&mut self) -> std::io::Result<()> {
-        let file = fs::File::open(&self.path)?;
-        let path = Path::new(&self.path);
+        let input = if self.path.is_empty() {
+            InputFrom::Stdin
+        } else {
+            InputFrom::File(fs::File::open(&self.path)?)
+        };
 
-        if path.is_dir() {
-            return Err(io::Error::new(ErrorKind::Unsupported, "Is a directory"));
+        if let InputFrom::File(file) = &input {
+            let metadata = file.metadata()?;
+            if metadata.is_dir() {
+                return Err(io::Error::new(ErrorKind::Unsupported, "Is a directory"));
+            }
         }
 
-        self.analyze(&file)?;
+        self.analyze(input)?;
 
         Ok(())
     }
@@ -174,6 +195,14 @@ impl Rwc {
     pub fn exec(&mut self) -> std::io::Result<()> {
         if self.matches.opt_present("h") {
             self.print_usage();
+            return Ok(());
+        }
+
+        if self.matches.free.is_empty() {
+            /* from stdin */
+            let mut wc = Wc::new();
+            wc.run()?;
+            wc.print_result(&self.matches, self.width);
             return Ok(());
         }
 
