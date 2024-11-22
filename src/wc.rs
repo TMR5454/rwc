@@ -25,10 +25,9 @@ enum InputFrom {
 
 impl InputFrom {
     fn stream(self) -> Box<dyn std::io::Read> {
-        if let InputFrom::File(file) = self {
-            Box::new(file)
-        } else {
-            Box::new(io::stdin())
+        match self {
+            InputFrom::File(file) => Box::new(file),
+            InputFrom::Stdin => Box::new(io::stdin()),
         }
     }
 }
@@ -44,8 +43,8 @@ impl Wc {
         /* if path.is_empty() then read from stdin */
         Self::with_path("")
     }
-    fn analyze(&mut self, input: InputFrom) -> std::io::Result<()> {
-        let mut reader = io::BufReader::new(input.stream());
+    fn analyze<T: std::io::Read>(&mut self, stream: T) -> std::io::Result<()> {
+        let mut reader = io::BufReader::new(stream);
         let mut line = String::with_capacity(256);
 
         loop {
@@ -117,7 +116,7 @@ impl Wc {
             }
         }
 
-        self.analyze(input)?;
+        self.analyze(input.stream())?;
 
         Ok(())
     }
