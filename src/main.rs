@@ -14,9 +14,12 @@ fn parse_opt() -> Options {
     opts
 }
 
-fn main() -> std::io::Result<()> {
+fn main() {
     let opts = parse_opt();
-    Rwc::with_opts(opts).exec()?;
-
-    Ok(())
+    match Rwc::with_opts(opts).exec() {
+        Ok(_) => {},
+        Err(_) => {
+            std::process::exit(1);
+        }
+    }
 }

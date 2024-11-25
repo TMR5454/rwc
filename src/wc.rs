@@ -192,6 +192,8 @@ impl Rwc {
     }
 
     pub fn exec(&mut self) -> std::io::Result<()> {
+        let mut ret: std::io::Result<()> = Ok(());
+
         if self.matches.opt_present("h") {
             self.print_usage();
             return Ok(());
@@ -216,6 +218,7 @@ impl Rwc {
                 }
                 Err(e) => {
                     eprintln!("{}: {}", &wc.path, e);
+                    ret = Err(e);
                 }
             }
             wc.print_result(&self.matches, self.width);
@@ -226,6 +229,6 @@ impl Rwc {
             total.print_result(&self.matches, self.width);
         }
 
-        Ok(())
+        ret
     }
 }
